@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Datara
 
-## Getting Started
+Datara collects original data for individuals, labs, and small and medium organizations. A buyer requests a measurement that does not exist yet and can receive a table, a written report, or a model. Public datasets and baseline training sit on the desk as a tool. The product story lives in `docs/PLAN (1).md`.
 
-First, run the development server:
+## Run locally
 
 ```bash
+npm install
+cp .env.example .env # only if .env does not already exist
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. Placeholder credentials are intentionally unused in this phase.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Included
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Company page for original collection: audiences, deliverables, and worked examples.
+- Request desk whose home is open briefs, with search, status filters, and brief detail.
+- Domain-neutral brief form. Sensor fields appear only when that method is chosen.
+- Recorded public-data links and one recorded baseline, labeled as a tool.
+- Local collection queue with simulated status labels and notes.
+- Browser-local persistence for briefs and the workspace name.
 
-## Learn More
+All statuses, public-data rows, and model metrics are demo fixtures. No authentication, external search, training, calendar booking, or backend is connected. The queue is a UI demonstration, not an authorized admin surface. Local storage is for nonsensitive prototype data only.
 
-To learn more about Next.js, take a look at the following resources:
+## Configuration
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`.env` is ignored by Git and contains filler values. `.env.example` documents planned service configuration. Replace values when implementing Clerk, FastAPI, MongoDB, Redis, source adapters, training, and Cal.com. Only variables prefixed with `NEXT_PUBLIC_` may be exposed to the browser; provider secrets stay server-side.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The Next.js app remains at the repository root for this frontend phase. Backend and execution directories can be added incrementally.
 
-## Deploy on Vercel
+## Checks
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run lint
+npm run build
+```

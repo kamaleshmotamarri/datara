@@ -9,9 +9,13 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "border-beam": "^1.4.1",
+    "liquid-gooey": "^0.2.2",
+    "metal-fx": "^2.0.11",
     "next": "16.4.3",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "thinking-orbs": "^0.3.2"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
