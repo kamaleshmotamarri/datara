@@ -1,8 +1,8 @@
 # PLAN.md — Datara
 
 > **Company:** Original data for individuals, labs, and small and medium organizations  
-> **Current phase:** Frontend only. No authentication, search, training, payments, or live collection.  
-> **Later stack:** Next.js · TypeScript · Tailwind CSS · Clerk · MongoDB · FastAPI · LangGraph · Celery · Redis · Docker
+> **Current phase:** Company site and desk, with Neon-backed briefs, a live public-data tool, and bounded training. No payments or live collection.  
+> **Later stack:** Next.js · TypeScript · Tailwind CSS · Clerk · Neon Postgres · Gemini · Route Handlers · Python/PyTorch trainer · Docker
 
 ## 1. What Datara is
 
@@ -21,6 +21,8 @@ Public datasets are a tool inside the product. Datara can look through Kaggle, H
 This document’s first build is the company site and the request desk. Later sections describe the software that will store briefs and run the public-data tool. Real fieldwork, participant recruitment, devices, payments, and clinical approval stay outside the software. The prototype stores a brief and shows its status. It does not perform the collection.
 
 ## 2. Current phase
+
+**Update.** The server layer now exists: briefs, public-data runs, training runs, and assistant messages are stored in Neon Postgres, and Gemini powers the desk assistant and the public-data workflow. The table below describes the original frontend demonstration; sign-in, saved briefs, live search and bounded training now sit behind it.
 
 The site and the desk are a frontend demonstration.
 
@@ -107,22 +109,22 @@ Keep the layers in one repository. Separate responsibilities do not require a la
 | Layer | Technology | Responsibility |
 |---|---|---|
 | Frontend | Next.js, TypeScript, Tailwind, Clerk | Company site, buyer desk, brief form, admin queue |
-| API | FastAPI, Pydantic, PyMongo | Sessions, ownership, MongoDB, queues, progress, calendar webhooks |
-| Public-data workflow | A small sequential LangGraph flow inside a Celery worker | Interpret a public-data question, call search adapters, assess rows, or draft a brief |
+| API | Next.js Route Handlers, Zod, `@neondatabase/serverless` | Sessions, ownership, Neon Postgres, progress, calendar webhooks |
+| Public-data workflow | A sequential TypeScript flow started with `after()` from the run route, calling Gemini and the source APIs | Interpret a public-data question, call search adapters, assess rows, or draft a brief |
+| AI | Google Gemini (`GEMINI_API_KEY`) | Desk assistant, question parsing, dataset assessment, and the training spec for a chosen table |
 | Training sandbox | A fresh Docker container launched by a trusted runner | Execute a reviewed PyTorch template with fixed dependencies and resource limits |
 
-MongoDB stores users, organizations, briefs, public-data runs, and training runs. Redis is the Celery queue. Dataset files, scripts, and weights live in a local `storage/` directory and are served only through authorized routes.
+Neon Postgres stores users, organizations, briefs, public-data runs, training runs, and assistant messages. Runs are tracked by status rows that the desk polls. Dataset files, scripts, and weights live in a local `storage/` directory and are served only through authorized routes.
 
 ```mermaid
 flowchart TD
     site["Company site"] --> brief["Collection brief"]
     desk["Request desk"] --> brief
-    brief --> api["FastAPI"]
-    api --> db["MongoDB"]
+    brief --> api["Route Handlers"]
+    api --> db["Neon Postgres"]
     desk --> tool["Public-data tool"]
     tool --> api
-    api --> queue["Redis / Celery"]
-    queue --> agent["LangGraph workflow"]
+    api --> agent["Gemini workflow"]
     agent --> search["Web, Hugging Face, Kaggle"]
     search --> decision{"Usable public table?"}
     decision -->|Yes| train["Reviewed PyTorch template"]
@@ -137,12 +139,12 @@ flowchart TD
 
 ## 7. Data models
 
-UUID strings for application IDs. BSON dates for timestamps. Pydantic validates input. Every collection has `_id`, `created_at`, and `updated_at`. Files stay on disk. Paths stay on the record.
+UUIDs for application IDs. `timestamptz` for timestamps. Zod validates input and Postgres `CHECK` constraints repeat the core rules. Every table has `id`, `created_at`, and `updated_at`. JSONB holds nested fields (sensor protocol, deliverables, dataset results, metrics). Files stay on disk. Paths stay on the record. The schema is applied through the Neon MCP and lives in the `datara` Neon project.
 
 ```typescript
 type ID = string;
 type DateTime = Date;
-interface Base { _id: ID; created_at: DateTime; updated_at: DateTime }
+interface Base { id: ID; created_at: DateTime; updated_at: DateTime }
 
 interface User extends Base {
   clerk_user_id: string;
@@ -233,25 +235,25 @@ interface Training_Run extends Base {
 }
 ```
 
-Clerk owns authentication. MongoDB does not store passwords. A buyer cannot set owner ids, roles, run results, or brief state. At least one of `deliverables.table`, `deliverables.report`, and `deliverables.model` must be true. `sensor` is required only when `method` is `sensor`.
+Clerk owns authentication. Neon does not store passwords. A buyer cannot set owner ids, roles, run results, or brief state. At least one of `deliverables.table`, `deliverables.report`, and `deliverables.model` must be true. `sensor` is required only when `method` is `sensor`.
 
-Indexes: unique `users.clerk_user_id`, owner indexes on briefs and runs, and a partial unique index on calendar booking ids when that integration exists.
+Tables: `users`, `organizations`, `collection_briefs`, `public_data_runs`, `training_runs`, `chat_messages`. Indexes: unique `users.clerk_user_id`, owner indexes on briefs, runs, training runs, and messages, and a partial unique index on calendar booking ids when that integration exists.
 
 ## 8. Later: public-data workflow and training
 
 Build this after briefs can be saved on the server.
 
 1. The user enters a public-data question and, if they know them, the target and the columns they need.
-2. The model extracts task, target, fields, and constraints. If the target is ambiguous, ask. Do not guess silently.
-3. Search a web-search API, the Hugging Face Hub API, and the official Kaggle API. Store title, source, URL, description, license, and a suitability note. Cap and deduplicate results.
+2. Gemini extracts task, target, fields, and constraints. If the target is ambiguous, ask. Do not guess silently.
+3. Search the Hugging Face Hub API and the official Kaggle API (a web-search adapter can be added later). Store title, source, URL, description, license, and a suitability note. Cap and deduplicate results.
 4. Assess with real metadata and file inspection. Do not invent columns, row counts, or licenses.
 5. If a supported CSV can carry the question, download at most 100 MB and 20,000 rows, clean from the training split only, and train from a reviewed PyTorch template inside a fresh container. Classification reports accuracy, macro-F1, and a confusion matrix. Regression reports MAE and RMSE. Always show a simple baseline.
 6. If the measurement is missing, write a short gap note and offer a prefilled collection brief. The buyer can edit it before saving.
 7. A source error is an error. It does not unlock a brief by itself.
 
-Training limits for the prototype: twenty epochs, ten minutes, CPU, one job at a time. The container has no network, no secrets, a non-root user, a read-only root, and a job-specific output mount. Generated code comes from the reviewed template. It cannot install packages or open sockets.
+Training limits for the prototype: twenty epochs, ten minutes, CPU, one job at a time. The container has no network, no secrets, a non-root user, a read-only root, and a job-specific output mount. Gemini does not write code that runs. It writes a validated spec (task type, target, feature columns, width) that the reviewed template consumes, so a model mistake cannot execute arbitrary code. The template cannot install packages or open sockets. In this prototype only Hugging Face CSV files are trained automatically; Kaggle tables are assessed and linked.
 
-Use Tavily, `huggingface_hub`, and the official Kaggle client. Credentials stay in backend environment variables. Restricted sources can be shown as links. They are not bypassed.
+Use the Hugging Face Hub and dataset-viewer HTTP APIs and the Kaggle REST API. Credentials stay in server environment variables. Restricted sources can be shown as links. They are not bypassed.
 
 ## 9. Later API
 
@@ -279,22 +281,21 @@ A consultation embed can wait. When it exists, it is one developer calendar, a t
 | Path | Contents |
 |---|---|
 | `app/` | Company site, request desk, brief form |
-| `backend/api/` | FastAPI, auth, schemas, MongoDB |
-| `backend/agent/` | Public-data workflow and source adapters |
-| `backend/tasks/` | Celery and the trusted Docker runner |
-| `backend/training/` | Reviewed PyTorch template and image |
+| `app/api/` | Route Handlers for briefs, public-data runs, training runs, chat, admin |
+| `app/lib/server/` | Neon client, Clerk user sync, Gemini client, source adapters, workflow, trainer runner |
+| `backend/training/` | Reviewed PyTorch template and Docker image |
 | `storage/` | Ignored local files |
 | `tests/` | API, brief validation, and one public-data path |
-| `compose.yaml` | API, Redis, MongoDB |
+| `.env.example` | Every variable, without secrets |
 
-The current repository keeps the Next.js app at the root. Backend directories are added only when that work starts. Commit an environment example without secrets.
+The repository keeps the Next.js app at the root and the API inside it. Commit an environment example without secrets.
 
 ## 11. Build order
 
 | Stage | Build | Done when |
 |---|---|---|
 | **Now — Company site and desk** | The page at `/`, the request desk, the domain-neutral brief, recorded examples, and the public-data tool labeled as a feature | A visitor can tell what Datara collects, file a brief, and find it on the desk. Public data and the recorded baseline are visibly secondary |
-| **Next — Saved briefs** | Clerk, FastAPI, MongoDB, ownership, operator queue | A signed-in buyer keeps a brief after refresh. Another user cannot read it. State labels stay labeled as demonstration |
+| **Next — Saved briefs** | Clerk, Route Handlers, Neon Postgres, ownership, operator queue | A signed-in buyer keeps a brief after refresh. Another user cannot read it. State labels stay labeled as demonstration |
 | **Then — Public-data tool** | Search adapters, assessment, combine step, handoff into a brief | A public question returns real links, or a prefilled brief when the measurement is absent |
 | **Then — Training** | Reviewed PyTorch template, Docker limits, metrics | One supported public CSV returns loadable weights and honest metrics |
 | **Outside this plan** | Field teams, devices, recruiting, payments, compliance, production hosting | Not a software completion check |

@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
 import { BriefForm } from "../components/brief-form";
+import { ConsultationDesk } from "../components/consultation-desk";
+import { PublicDataTool, type BriefDraft } from "../components/public-data-tool";
 import { Beam, MetalButton, StatusOrb } from "../components/motion";
 import {
   loadBriefs,
   persistBriefs,
   seedBriefs,
+  toApiPayload,
   type Brief,
   type BriefState,
 } from "../lib/briefs";
@@ -16,37 +20,15 @@ type View = "Requests" | "Public data" | "Models" | "Collection queue" | "Settin
 
 type Turn = { role: "user" | "desk"; text: string };
 
-const navItems: [View, string][] = [
+const navEntries: [View, string, ("library" | "consultation")?][] = [
   ["Requests", "01"],
-  ["Public data", "02"],
-  ["Models", "03"],
-  ["Collection queue", "04"],
-  ["Settings", "05"],
+  ["Public data", "02", "library"],
+  ["Public data", "03", "consultation"],
+  ["Models", "04"],
+  ["Collection queue", "05"],
+  ["Settings", "06"],
 ];
 
-const datasets = [
-  {
-    title: "UCI HAR Dataset",
-    source: "UCI Repository",
-    rows: "10,299",
-    match: "Recorded",
-    url: "https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones",
-  },
-  {
-    title: "Human Activity Recognition",
-    source: "Kaggle",
-    rows: "10,299",
-    match: "Recorded",
-    url: "https://www.kaggle.com/datasets/uciml/human-activity-recognition-with-smartphones",
-  },
-  {
-    title: "Heart Disease",
-    source: "UCI Repository",
-    rows: "303",
-    match: "Recorded",
-    url: "https://archive.ics.uci.edu/dataset/45/heart+disease",
-  },
-];
 
 function stampClass(state: string) {
   if (state === "Fulfilled") return "done";
@@ -71,13 +53,16 @@ function answer(question: string, briefs: Brief[]) {
   if (/model|accuracy|baseline|pytorch|train/.test(text)) {
     return "Models holds one recorded baseline from a public activity-recognition set: 94.2% test accuracy and 0.938 macro-F1. Those figures were not produced by a training job in this browser.";
   }
+  if (/consult|appoint|book|calendar|meeting/.test(text)) {
+    return "Consultation is under Public data. Book a thirty-minute slot for yourself or for an organization. The time is held. A collection does not start from the booking.";
+  }
   if (/brief|request|queue|ticket|status/.test(text)) {
     return `This browser is holding ${briefs.length} brief${briefs.length === 1 ? "" : "s"}: ${briefs
       .map((brief) => `${brief.title} (${brief.state.toLowerCase()})`)
       .join("; ")}. Changing a queue label does not start collection.`;
   }
   if (/demo|limit|real|backend|what can/.test(text)) {
-    return "This is a frontend desk. Search, training, sign-in, and calendar booking are not connected. Briefs stay in this browser.";
+    return "This desk saves briefs, searches public sources, and books a consultation under Public data. A booking holds a time. It does not start fieldwork.";
   }
   return "I can read the briefs on this desk, the recorded public-data links, and the activity-recognition fixture. Ask about one of those by name.";
 }
@@ -95,13 +80,19 @@ export default function DeskPage() {
   const [draft, setDraft] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [thinking, setThinking] = useState(false);
+  const [draftBrief, setDraftBrief] = useState<BriefDraft | null>(null);
   const [workspace, setWorkspace] = useState("Studio workspace");
+  const [publicPane, setPublicPane] = useState<"library" | "consultation">("library");
 
   useEffect(() => {
     const timer = setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
       const requested = params.get("view");
       if (requested === "public") setView("Public data");
+      if (requested === "consultation") {
+        setView("Public data");
+        setPublicPane("consultation");
+      }
       if (requested === "models") setView("Models");
       if (requested === "queue") setView("Collection queue");
       setBriefs(loadBriefs());
@@ -146,6 +137,7 @@ export default function DeskPage() {
     setView(next);
     setSelected(null);
     setQuery("");
+    if (next === "Public data") setPublicPane("library");
   };
 
   const visible = briefs.filter((brief) => {
@@ -161,10 +153,21 @@ export default function DeskPage() {
     setDraft("");
     setTurns((prev) => [...prev, { role: "user", text: cleaned }]);
     setThinking(true);
-    window.setTimeout(() => {
-      setTurns((prev) => [...prev, { role: "desk", text: answer(cleaned, briefs) }]);
-      setThinking(false);
-    }, 700);
+    fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: cleaned }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok || !data.reply) throw new Error(data.error || "unavailable");
+        return data.reply as string;
+      })
+      .catch(() => answer(cleaned, briefs))
+      .then((text) => {
+        setTurns((prev) => [...prev, { role: "desk", text }]);
+        setThinking(false);
+      });
   };
 
   const counts = {
@@ -181,7 +184,7 @@ export default function DeskPage() {
     },
     "Public data": {
       title: "Public data",
-      lede: "A tool for Kaggle, Hugging Face, and other public sets. Recorded links only. Live search is not connected.",
+      lede: "A tool for Kaggle and Hugging Face. Searches are live and every link is a real source. If the measurement is missing, it hands you a brief.",
     },
     Models: {
       title: "Models",
@@ -205,25 +208,39 @@ export default function DeskPage() {
         </Link>
         <div className="spine-kicker">Collection desk</div>
         <nav aria-label="Desk">
-          {navItems.map(([item, index]) => (
-            <button
-              key={item}
-              className={`nav-btn ${view === item && !selected ? "active" : ""}`}
-              aria-current={view === item && !selected ? "page" : undefined}
-              onClick={() => nav(item)}
-            >
-              <span className="nav-idx">{index}</span>
-              <span>{item === "Collection queue" ? "Queue" : item}</span>
-              {item === "Requests" && <span className="count-pill">{briefs.length}</span>}
-            </button>
-          ))}
+          {navEntries.map(([item, index, pane]) => {
+            const active =
+              !selected &&
+              view === item &&
+              (item !== "Public data" || publicPane === (pane ?? "library"));
+            return (
+              <button
+                key={`${item}-${pane ?? ""}`}
+                className={`nav-btn ${active ? "active" : ""}`}
+                aria-current={active ? "page" : undefined}
+                onClick={() => {
+                  nav(item);
+                  if (pane) setPublicPane(pane);
+                }}
+              >
+                <span className="nav-idx">{index}</span>
+                <span>
+                  {pane === "consultation"
+                    ? "Consultation"
+                    : item === "Collection queue"
+                      ? "Queue"
+                      : item}
+                </span>
+                {item === "Requests" && <span className="count-pill">{briefs.length}</span>}
+              </button>
+            );
+          })}
         </nav>
         <div className="spine-foot">
           <button className="who" onClick={() => nav("Settings")}>
-            <span className="initials">SK</span>
             <span>
-              Sam Kim
-              <small>Buyer · demo</small>
+              Workspace settings
+              <small>Account secured by Clerk</small>
             </span>
           </button>
         </div>
@@ -234,10 +251,17 @@ export default function DeskPage() {
           <div className="crumbs">
             <Link href="/">Datara</Link>
             <span aria-hidden="true">/</span>
-            <strong>{selected ? selected.title : headings[view].title}</strong>
+            <strong>
+              {selected
+                ? selected.title
+                : view === "Public data" && publicPane === "consultation"
+                  ? "Consultation"
+                  : headings[view].title}
+            </strong>
           </div>
           <div className="mast-actions">
             <span className="mast-meta">Recorded fixtures</span>
+            <UserButton />
             <button
               className="icon-btn"
               aria-label="Notifications"
@@ -260,8 +284,16 @@ export default function DeskPage() {
               <div className="page-head">
                 <div>
                   <div className="kicker">Datara collection desk</div>
-                  <h1>{headings[view].title}</h1>
-                  <p className="lede">{headings[view].lede}</p>
+                  <h1>
+                    {view === "Public data" && publicPane === "consultation"
+                      ? "Consultation"
+                      : headings[view].title}
+                  </h1>
+                  <p className="lede">
+                    {view === "Public data" && publicPane === "consultation"
+                      ? "Book a thirty-minute conversation with the collection team, for yourself or for an organization. The slot is held. Collection starts from a brief, not from the booking."
+                      : headings[view].lede}
+                  </p>
                 </div>
                 {view === "Requests" || view === "Collection queue" ? (
                   <MetalButton onClick={() => setModal("brief")}>New request</MetalButton>
@@ -380,7 +412,35 @@ export default function DeskPage() {
                 </>
               )}
 
-              {view === "Public data" && <DatasetTable />}
+              {view === "Public data" && (
+                <>
+                  <div className="filters pane-tabs" role="tablist" aria-label="Public data">
+                    <button
+                      className={publicPane === "library" ? "on" : ""}
+                      onClick={() => setPublicPane("library")}
+                    >
+                      Sources
+                    </button>
+                    <button
+                      className={publicPane === "consultation" ? "on" : ""}
+                      onClick={() => setPublicPane("consultation")}
+                    >
+                      Consultation
+                    </button>
+                  </div>
+                  {publicPane === "library" ? (
+                    <PublicDataTool
+                      notify={notify}
+                      onDraft={(d) => {
+                        setDraftBrief(d);
+                        setModal("brief");
+                      }}
+                    />
+                  ) : (
+                    <ConsultationDesk notify={notify} />
+                  )}
+                </>
+              )}
               {view === "Models" && <Results />}
               {view === "Collection queue" && (
                 <Queue
@@ -415,8 +475,8 @@ export default function DeskPage() {
                     </button>
                   </form>
                   <p className="settings-note">
-                    Sign-in, live search, training, and calendar booking are a
-                    later phase. This desk does not ask for provider keys.
+                    Search and training run from this desk. Book a consultation
+                    under Public data. Clerk handles access.
                   </p>
                 </section>
               )}
@@ -563,13 +623,39 @@ export default function DeskPage() {
                   notify("Maximum age must be greater than or equal to minimum age.")
                 }
                 onSave={(brief) => {
+                  const wantsConsult = Boolean(brief.details.Consultation);
+                  fetch("/api/briefs", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ ...toApiPayload(brief), origin: draftBrief ? "public_data_gap" : "direct", source_run_id: draftBrief?.source_run_id ?? null }),
+                  })
+                    .then((res) =>
+                      notify(
+                        wantsConsult
+                          ? res.ok
+                            ? "Brief saved. Choose a time with the collection team."
+                            : "Saved in this browser only. You can still book a consultation."
+                          : res.ok
+                            ? "Brief saved to your account."
+                            : "Saved in this browser only. The server rejected it.",
+                      ),
+                    )
+                    .catch(() =>
+                      notify(
+                        wantsConsult
+                          ? "Saved in this browser only. You can still book a consultation."
+                          : "Saved in this browser only. The server was unreachable.",
+                      ),
+                    );
                   setBriefs([brief, ...briefs]);
-                  setView("Requests");
+                  setView(wantsConsult ? "Public data" : "Requests");
+                  if (wantsConsult) setPublicPane("consultation");
                   setFilter("All");
                   setSelected(null);
                   setModal(null);
-                  notify("Brief saved in this browser.");
+                  setDraftBrief(null);
                 }}
+                initial={draftBrief ?? undefined}
               />
             )}
           </section>
@@ -660,42 +746,6 @@ function BriefDetail({ brief, onBack }: { brief: Brief; onBack: () => void }) {
         </details>
       )}
     </>
-  );
-}
-
-function DatasetTable() {
-  return (
-    <section>
-      <p className="notice">
-        Suitability and row counts are recorded examples. Confirm both on the
-        source page. Combining these tables is part of the tool, and it is not
-        running here.
-      </p>
-      <table className="sources">
-        <thead>
-          <tr>
-            <th>Note</th>
-            <th>Dataset</th>
-            <th>Source</th>
-            <th>Rows</th>
-          </tr>
-        </thead>
-        <tbody>
-          {datasets.map((dataset) => (
-            <tr key={dataset.title}>
-              <td className="fit">{dataset.match}</td>
-              <td>
-                <a href={dataset.url} target="_blank" rel="noreferrer">
-                  {dataset.title}
-                </a>
-              </td>
-              <td>{dataset.source}</td>
-              <td>{dataset.rows}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
   );
 }
 

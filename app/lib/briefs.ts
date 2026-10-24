@@ -98,3 +98,45 @@ export function loadBriefs(): Brief[] {
 export function persistBriefs(briefs: Brief[]) {
   localStorage.setItem(BRIEF_KEY, JSON.stringify(briefs));
 }
+
+/** Maps the form's Brief to the server's validated payload. */
+export function toApiPayload(brief: Brief) {
+  const d = brief.details;
+  const num = (key: string) => {
+    const n = Number(d[key]);
+    return d[key] && Number.isFinite(n) ? n : null;
+  };
+  const method = brief.method.toLowerCase();
+  return {
+    title: brief.title,
+    domain: brief.domain,
+    question: brief.question,
+    measure: brief.measure,
+    observed: brief.observed,
+    sample_count: num("Sample count") ? Math.round(num("Sample count")!) : null,
+    method,
+    sensor:
+      method === "sensor"
+        ? {
+            device: d["Device"] ?? "",
+            sampling_hz: num("Sampling Hz") ?? 1,
+            session_minutes: num("Session minutes") ?? 1,
+            sessions: Math.round(num("Sessions") ?? 1),
+            synchronization: d["Synchronization"] ?? "",
+          }
+        : null,
+    deliverables: {
+      table: brief.deliverables.includes("Table"),
+      report: brief.deliverables.includes("Report"),
+      model: brief.deliverables.includes("Model"),
+      table_format: d["Table format"] ?? "CSV",
+    },
+    geography: d["Geography"] ?? "",
+    age_min: num("Minimum age"),
+    age_max: num("Maximum age"),
+    desired_date: d["Desired date"] || null,
+    budget_usd: num("Budget USD"),
+    quality_notes: d["Quality notes"] ?? "",
+    consultation_requested: Boolean(d["Consultation"]),
+  };
+}

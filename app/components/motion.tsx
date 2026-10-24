@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BorderBeam } from "border-beam";
 import { Liquid } from "liquid-gooey";
-import { MetalFx } from "metal-fx";
 import { ThinkingOrb } from "thinking-orbs";
 
 function useEffects() {
@@ -25,34 +24,10 @@ export function MetalButton({
   children: string;
   onClick: () => void;
 }) {
-  const motion = useEffects();
-  const root = useRef<HTMLDivElement>(null);
-  const [metal, setMetal] = useState(true);
-  useEffect(() => {
-    if (!motion) return;
-    const timer = window.setTimeout(() => {
-      const node = root.current;
-      if (!node || getComputedStyle(node).visibility === "hidden") setMetal(false);
-    }, 1200);
-    return () => window.clearTimeout(timer);
-  }, [motion]);
-  const button = (
-    <button className="btn solid metal-host" type="button" onClick={onClick}>
+  return (
+    <button className="btn accent" type="button" onClick={onClick}>
       {children}
     </button>
-  );
-  if (!motion || !metal) return button;
-  return (
-    <MetalFx
-      ref={root}
-      preset="gold"
-      theme="light"
-      strength={0.7}
-      variant="button"
-      borderRadius={999}
-    >
-      {button}
-    </MetalFx>
   );
 }
 

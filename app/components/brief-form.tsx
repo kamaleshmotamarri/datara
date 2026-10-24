@@ -18,12 +18,16 @@ export function BriefForm({
   onCancel,
   onInvalidAge,
   onSave,
+  initial,
 }: {
   onCancel: () => void;
   onInvalidAge: () => void;
   onSave: (brief: Brief) => void;
+  initial?: { title?: string; question?: string; measure?: string; observed?: string; method?: string; quality_notes?: string };
 }) {
-  const [method, setMethod] = useState("Experiment");
+  const [method, setMethod] = useState(
+    initial?.method ? initial.method[0].toUpperCase() + initial.method.slice(1) : "Experiment",
+  );
   const [error, setError] = useState("");
 
   return (
@@ -84,7 +88,7 @@ export function BriefForm({
             if (value) details[label] = value;
           }
           if (form.get("consultation")) {
-            details.Consultation = "Requested. Booking is not connected.";
+            details.Consultation = "Requested";
           }
           onSave({
             id: `brief-${Date.now()}`,
@@ -107,6 +111,7 @@ export function BriefForm({
           <input
             autoFocus
             name="title"
+            defaultValue={initial?.title}
             required
             maxLength={120}
             placeholder="Mile time from health metrics"
@@ -138,6 +143,7 @@ export function BriefForm({
           Question
           <textarea
             name="question"
+            defaultValue={initial?.question}
             required
             rows={3}
             placeholder="What decision should this data support?"
@@ -147,6 +153,7 @@ export function BriefForm({
           What to measure
           <input
             name="measure"
+            defaultValue={initial?.measure}
             required
             placeholder="Mile time, resting heart rate, blood pressure"
           />
@@ -155,6 +162,7 @@ export function BriefForm({
           Who or what is observed
           <input
             name="observed"
+            defaultValue={initial?.observed}
             required
             placeholder="Adults completing a supervised mile"
           />
@@ -240,13 +248,14 @@ export function BriefForm({
           Labels and quality
           <textarea
             name="quality"
+            defaultValue={initial?.quality_notes}
             rows={2}
             placeholder="What counts as a complete record, and what may be missing."
           />
         </label>
         <label className="check">
           <input type="checkbox" name="consultation" />
-          <span>I want a technical consultation. Booking is not connected yet.</span>
+          <span>I want a technical consultation. After saving, book a time under Public data.</span>
         </label>
         <div className="form-actions">
           <button type="button" className="btn line" onClick={onCancel}>

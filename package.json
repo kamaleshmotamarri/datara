@@ -6,16 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker": "tsx --env-file=.env backend/training/worker.ts"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.9.20",
+    "@neondatabase/serverless": "^1.2.0",
     "border-beam": "^1.4.1",
     "liquid-gooey": "^0.2.2",
-    "metal-fx": "^2.0.11",
     "next": "16.4.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "thinking-orbs": "^0.3.2"
+    "thinking-orbs": "^0.3.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -25,6 +28,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

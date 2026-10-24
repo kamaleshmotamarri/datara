@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { BriefForm } from "./components/brief-form";
 import { Beam, DeliverableSet, MetalButton, StatusOrb } from "./components/motion";
@@ -65,6 +66,19 @@ export default function HomePage() {
           <a href="#examples">Examples</a>
           <a href="#method">Method</a>
           <Link href="/desk">Desk</Link>
+          <span className="auth-actions">
+            <Show when="signed-out">
+              <SignInButton>
+                <button className="auth-link" type="button">Sign in</button>
+              </SignInButton>
+              <SignUpButton>
+                <button className="auth-button" type="button">Apply</button>
+              </SignUpButton>
+            </Show>
+            <Show when="signed-in">
+              <UserButton />
+            </Show>
+          </span>
         </nav>
       </header>
 

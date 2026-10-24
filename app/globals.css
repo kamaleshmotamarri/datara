@@ -332,18 +332,20 @@ h1 {
   color: #f6f1e7;
 }
 
-.metal-host {
-  border-radius: 999px;
-  padding-inline: 18px;
-}
-
-.metal-fx-root .btn.solid {
-  color: #14110e;
-  background: transparent;
-}
-
 .btn.solid:hover {
   background: #2c261f;
+}
+
+.btn.accent {
+  border: 1px solid var(--cinnabar-deep);
+  background: var(--cinnabar-deep);
+  color: #fffaf3;
+  box-shadow: 0 2px 0 rgba(20, 17, 14, 0.18);
+}
+
+.btn.accent:hover {
+  border-color: #672216;
+  background: #672216;
 }
 
 .btn.line {
@@ -819,6 +821,56 @@ h2 {
   padding: 8px 0 8px 12px;
   color: var(--ink-2);
   margin-bottom: 18px;
+  font-size: 14px;
+}
+
+.pane-tabs {
+  margin: 4px 0 22px;
+}
+
+.filters.wrap {
+  flex-wrap: wrap;
+}
+
+.consult-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 8px;
+  margin: 14px 0 8px;
+}
+
+.slot-btn {
+  text-align: left;
+  background: #fffdf8;
+  border: 1px solid var(--rule);
+  padding: 10px 12px;
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.slot-btn.on {
+  border-color: var(--cinnabar);
+  box-shadow: inset 3px 0 0 var(--cinnabar);
+}
+
+.appt {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr auto;
+  gap: 16px;
+  align-items: start;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.appt h3 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.appt p {
+  margin: 0;
+  color: var(--mute);
   font-size: 14px;
 }
 
@@ -1475,6 +1527,7 @@ h2 {
   .manila,
   .intro-row,
   .ticket,
+  .appt,
   .form-grid {
     display: block;
   }
@@ -1485,7 +1538,8 @@ h2 {
     margin-top: 12px;
   }
 
-  .ticket label {
+  .ticket label,
+  .appt .btn {
     margin-top: 12px;
   }
 
@@ -1569,12 +1623,53 @@ h2 {
 
 .site-bar nav {
   display: flex;
+  align-items: center;
   gap: 18px;
   font-family: var(--font-mono), monospace;
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #cfc6b8;
+}
+
+.auth-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 4px;
+}
+
+.auth-link,
+.auth-button {
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.auth-link:hover {
+  color: #f6f1e7;
+}
+
+.auth-button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid #9b8f7e;
+  background: #f3eee4;
+  color: var(--ink);
+}
+
+.auth-button:hover {
+  border-color: #f3eee4;
+  background: #fffaf3;
+}
+
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background: var(--paper);
 }
 
 .site-bar nav a:hover {
@@ -1812,6 +1907,11 @@ h2 {
 
   .site-bar nav {
     gap: 12px;
+    letter-spacing: 0.08em;
+  }
+
+  .site-bar nav > a:not(:last-of-type) {
+    display: none;
   }
 
   .hero h1 {

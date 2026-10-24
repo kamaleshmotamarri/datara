@@ -42,3 +42,7 @@ next-env.d.ts
 
 # Commit the placeholder configuration reference
 !.env.example
+
+# local training
+.venv-train/
+/storage/
