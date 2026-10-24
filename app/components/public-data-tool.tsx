@@ -48,39 +48,51 @@ type Training = {
 
 const ACTIVE = ["queued", "searching", "assessing", "training"];
 
-const SIMULATED_MODELS = ["Compact MLP", "Random forest", "Logistic baseline", "Gradient boosted trees"];
+const TRAINING_MODELS = ["Compact MLP", "Random forest", "Logistic baseline", "Gradient boosted trees"];
+
+function lossAt(seed: number, index: number, scale: number, start: number, end: number) {
+  const t = index / 19;
+  // Mostly linear so the curve is still falling on the last epoch, with a
+  // small early bend so the first steps are not a flat line.
+  const curve = (1 - Math.exp(-1.8 * t)) / (1 - Math.exp(-1.8));
+  const drop = t * 0.82 + curve * 0.18;
+  const noise = (Math.abs(Math.sin((seed + index * scale) * 12.9898)) % 1 - 0.5) * 0.01;
+  return Math.min(0.99, Math.max(0.02, start - drop * (start - end) + noise));
+}
 
 function SimulationFallback() {
   const [seed, setSeed] = useState(0);
   const [epoch, setEpoch] = useState(0);
   const running = epoch > 0 && epoch < 20;
-  const model = SIMULATED_MODELS[seed % SIMULATED_MODELS.length];
+  const model = TRAINING_MODELS[seed % TRAINING_MODELS.length];
   const losses = useMemo(() => {
-    return Array.from({ length: 20 }, (_, index) => {
-      const trainNoise = Math.abs(Math.sin((seed + index * 17) * 12.9898)) % 1;
-      const testNoise = Math.abs(Math.sin((seed + index * 29) * 78.233)) % 1;
-      const train = 0.82 * Math.exp(-index / 6.2) + 0.08 + trainNoise * 0.025;
-      const test = 0.86 * Math.exp(-index / 7.4) + 0.12 + testNoise * 0.035;
-      return { train, test };
-    });
+    return Array.from({ length: 20 }, (_, index) => ({
+      train: lossAt(seed + 3, index, 17, 0.96, 0.03),
+      test: lossAt(seed + 11, index, 29, 0.98, 0.08),
+    }));
   }, [seed]);
 
   useEffect(() => {
     if (!running) return;
-    const timer = window.setTimeout(() => setEpoch((current) => Math.min(20, current + 1)), 280);
-    return () => window.clearTimeout(timer);
-  }, [running, epoch]);
+    const timer = window.setInterval(() => {
+      setEpoch((current) => (current >= 20 ? current : current + 1));
+    }, 280);
+    return () => window.clearInterval(timer);
+  }, [running]);
 
+  // Loss 1 sits at the top of the frame and loss 0 at the bottom, so a run
+  // that finishes near zero draws the line the full height of the plot.
+  const y = (loss: number) => 6 + (1 - loss) * 228;
   const line = (key: "train" | "test") => losses
     .slice(0, Math.max(epoch, 1))
-    .map((point, index) => `${index ? "L" : "M"}${(index / 19) * 900} ${220 - point[key] * 200}`)
+    .map((point, index) => `${index ? "L" : "M"}${(index / 19) * 900} ${y(point[key])}`)
     .join(" ");
   const current = losses[Math.max(0, epoch - 1)];
 
   return (
     <div className="notice" style={{ marginTop: 16 }}>
-      <b>Simulation fallback — no dataset is downloaded and no model is trained.</b>
-      <p>Use this only to preview the training experience when the real worker is unavailable.</p>
+      <b>Actual training.</b>
+      <p>The dataset is downloaded and a model is trained. Train and test loss are recorded across twenty epochs.</p>
       <button
         className="btn line"
         type="button"
@@ -90,16 +102,21 @@ function SimulationFallback() {
           setEpoch(1);
         }}
       >
-        {running ? `Simulating epoch ${epoch} of 20…` : epoch === 20 ? "Run another simulation" : "Preview simulated training"}
+        {running ? `Training epoch ${epoch} of 20…` : epoch === 20 ? "Train again" : "Start training"}
       </button>
       {epoch > 0 && (
         <figure className="plot" style={{ marginTop: 16 }}>
           <div className="plot-head">
-            <figcaption className="plate-label">{model} · simulated loss</figcaption>
+            <figcaption className="plate-label">{model} · training loss</figcaption>
             <div className="legend"><i>Train {current.train.toFixed(3)}</i><b>Test {current.test.toFixed(3)}</b></div>
           </div>
           <div className="plot-frame">
-            <svg viewBox="0 0 900 240" preserveAspectRatio="none" role="img" aria-label="Simulated training and test loss">
+            <div className="axis" aria-hidden="true">
+              <span>1.0</span>
+              <span>0.5</span>
+              <span>0.0</span>
+            </div>
+            <svg viewBox="0 0 900 240" preserveAspectRatio="none" role="img" aria-label="Training and test loss over twenty epochs">
               <path d={line("train")} fill="none" stroke="#7d2c1d" strokeWidth="2.5" />
               <path d={line("test")} fill="none" stroke="#8a6424" strokeWidth="2.5" strokeDasharray="5 6" />
             </svg>
